@@ -1,0 +1,159 @@
+/* Loaded alongside PDF.js's upstream text-layer stylesheet.
+   buildUI() creates the controls; render() creates the page and its overlays.
+   Native nesting scopes these rules to the viewer, also when Shadow DOM is disabled. */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.pdf-viewer {
+  /* Responsive controls follow the component's width, independently of the browser window. */
+  container: pdf-viewer / inline-size;
+  color: #172b43;
+  background: #f4f6f9;
+  border: 1px solid #dce2e9;
+  border-radius: 12px;
+  overflow: hidden;
+  font: 15px/1.5 system-ui, sans-serif;
+
+  * {
+    box-sizing: border-box;
+  }
+
+  .toolbar [hidden] { display: none !important; }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+    background: white;
+    border-bottom: 1px solid #dce2e9;
+
+    button, input {
+      font: inherit;
+      color: inherit;
+      border: 1px solid #c2ccda;
+      border-radius: 6px;
+      background: white;
+      padding: 7px 10px;
+    }
+
+    button {
+      cursor: pointer;
+
+      &:hover:not(:disabled) {
+        background: #eaf2ff;
+        border-color: #396bc2;
+      }
+    }
+
+    /* updateControls() combines the busy lock with page and zoom boundaries. */
+    :disabled {
+      opacity: .45;
+      cursor: default;
+    }
+
+    .page-form {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+
+      input { width: 5.5em; }
+    }
+
+    .zoom-value {
+      min-width: 4em;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Adapt to narrow embedding areas without shrinking control text. */
+    @container pdf-viewer (max-width: 480px) {
+      gap: 6px;
+      padding: 8px;
+
+      button { padding: 7px; }
+    }
+  }
+
+  /* Preserve a visible keyboard focus indicator on controls, the PDF area and links. */
+  .toolbar :focus-visible, .password-form :focus-visible, .viewport:focus-visible, .pdf-link:focus-visible {
+    outline: 3px solid #2463ce;
+    outline-offset: 2px;
+  }
+
+  .status {
+    padding: 0 16px;
+    margin: 8px 0;
+
+    /* The live status node remains in the DOM but needs no space when idle. */
+    &:empty { display: none; }
+  }
+
+  /* Outside the toolbar so password entry stays enabled while loading is busy. */
+  .password-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px 16px;
+
+    input, button {
+      font: inherit;
+      color: inherit;
+      padding: 7px 10px;
+      border: 1px solid #c2ccda;
+      border-radius: 6px;
+      background: white;
+      max-width: 100%;
+    }
+
+    button { cursor: pointer; }
+  }
+
+  .viewport {
+    overflow: auto;
+    /* Reserve vertical scrollbar space before the first fit-to-width measurement. */
+    scrollbar-gutter: stable;
+    max-height: 80vh;
+    min-height: 160px;
+    /* Keep side padding in sync with render()'s 32px width deduction. */
+    padding: 16px;
+  }
+
+  .pdf-page {
+    /* Anchor all overlays to the same page box; render() supplies its pixel dimensions. */
+    position: relative;
+    margin: 0 auto;
+    background: white;
+    box-shadow: 0 2px 12px #172b4320;
+
+    /* PDF.js text-layer defaults; render() also sets scale and total scale for this page. */
+    --min-font-size: 1;
+    --user-unit: 1;
+    --scale-round-x: 1px;
+    --scale-round-y: 1px;
+
+    /* Avoid the baseline gap of an inline canvas beneath the page. */
+    canvas { display: block; }
+  }
+
+  .link-layer {
+    position: absolute;
+    inset: 0;
+    /* Let selections reach the text layer except within actual link rectangles. */
+    pointer-events: none;
+
+    .pdf-link {
+      /* render() converts PDF annotation coordinates to viewport pixels. */
+      position: absolute;
+      display: block;
+      pointer-events: auto;
+
+      &:hover { background: #2463ce18; }
+    }
+  }
+}

@@ -14,7 +14,20 @@ export const component = {
     }],
     css: ["ccm.load", "././resources/styles.css"],
     pdf: "././libs/pdf_viewer/resources/demo.pdf",
-    viewer: { navigation: false, links: true, download: true },
+    viewer: {
+      navigation: false, links: true, download: true,
+      labels: {
+        viewer: "PDF Viewer", previous: "Previous", next: "Next", page: "Page", of: "of",
+        zoomOut: "Zoom out", zoomIn: "Zoom in", fit: "Fit to width", download: "Download",
+        loading: "Loading PDF …", rendering: "Loading page …", missing: "No PDF URL provided.",
+        error: "The PDF could not be loaded or displayed.",
+        password: "Please enter the password for this PDF.",
+        passwordIncorrect: "Incorrect password. Please try again.",
+        passwordLabel: "Password", unlock: "Open PDF", cancel: "Cancel",
+        passwordCancelled: "Opening the PDF was cancelled.",
+        invalidPage: "Please enter a valid page number.", link: "Link in PDF",
+      },
+    },
     // ignore prevents ccm from eagerly starting embedded apps before their step is visible.
     ignore: { slides: [] },
     comments: false,
@@ -23,11 +36,11 @@ export const component = {
     /** Pause after audio ends, in milliseconds. */
     autoplayDelay: 1000,
     labels: {
-      navigation: "Slidecast-Navigation", previous: "Zurück", next: "Weiter",
-      step: "Schritt", of: "von", slide: "Folie", audio: "Audio zur Folie",
-      comments: "Kommentare zur Folie", commentsPlaceholder: "Kommentierung wird später ergänzt.",
-      missingLinkTarget: "Die verlinkte PDF-Seite ist nicht Teil dieses Slidecasts.",
-      error: "Der Slidecast konnte nicht angezeigt werden: ", pdfNotOpened: "Das PDF wurde nicht geöffnet.",
+      navigation: 'Slidecast navigation', previous: 'Previous', next: 'Next',
+      step: 'Step', of: 'of', slide: 'Slide', audio: 'Slide audio',
+      comments: 'Slide comments', commentsPlaceholder: 'Commenting will be added later.',
+      missingLinkTarget: 'The linked PDF page is not part of this slidecast.',
+      error: 'The slidecast could not be displayed: ', pdfNotOpened: 'The PDF was not opened.',
     },
     extensions: [],
   },
@@ -156,23 +169,23 @@ export const component = {
       controls();
     };
     const validate = slides => {
-      if (!Array.isArray(slides) || !slides.length) throw new Error("Keine Folien vorhanden.");
+      if (!Array.isArray(slides) || !slides.length) throw new Error("No slides available.");
       for (const slide of slides) {
-        if (!slide || typeof slide !== "object") throw new TypeError("Ungültiger Folieneintrag.");
+        if (!slide || typeof slide !== "object") throw new TypeError("Invalid slide entry.");
         if ([slide.page !== undefined, slide.image !== undefined, slide.app !== undefined].filter(Boolean).length !== 1)
-          throw new TypeError("Jeder Eintrag braucht genau page, image oder app.");
+          throw new TypeError("Each entry must specify exactly one of page, image or app.");
         if (slide.page !== undefined && (!Number.isInteger(slide.page) || slide.page < 1 || slide.page > (viewer?.state?.pages || 0)))
-          throw new RangeError("PDF-Seite außerhalb des Dokuments.");
+          throw new RangeError("PDF page is outside the document.");
         if (slide.app !== undefined && (!Array.isArray(slide.app) || slide.app[0] !== "ccm.start"))
-          throw new TypeError("Apps müssen eine ccm.start-Abhängigkeit sein.");
+          throw new TypeError("Apps must be a ccm.start dependency.");
         for (const key of ["image", "audio"]) if (slide[key] !== undefined) mediaURL(slide[key]);
-        if (slide.description !== undefined && typeof slide.description !== "string") throw new TypeError("Beschreibung muss ein String sein.");
+        if (slide.description !== undefined && typeof slide.description !== "string") throw new TypeError("Description must be a string.");
       }
     };
     const mediaURL = value => {
-      if (typeof value !== "string" || !value.trim()) throw new TypeError("Leere Medien-URL.");
+      if (typeof value !== "string" || !value.trim()) throw new TypeError("Empty media URL.");
       const url = new URL(value, document.baseURI);
-      if (!["http:", "https:", "blob:"].includes(url.protocol)) throw new TypeError("Ungültige Medien-URL.");
+      if (!["http:", "https:", "blob:"].includes(url.protocol)) throw new TypeError("Invalid media URL.");
       return url.href;
     };
     // A small HTML allowlist permits prose formatting without scripts, event handlers or active embeds.
@@ -260,7 +273,7 @@ export const component = {
       if (!Number.isFinite(this.autoplayDelay) || this.autoplayDelay < 0 || this.autoplayDelay > 2147483647)
         throw new RangeError("autoplayDelay must be a non-negative timer duration in milliseconds.");
       const input = structuredClone(this.ignore?.slides || []);
-      if (!Array.isArray(input)) throw new TypeError("ignore.slides muss ein Array sein.");
+      if (!Array.isArray(input)) throw new TypeError("ignore.slides must be an array.");
       if (input.length === 0 || input.some(slide => slide?.page !== undefined)) {
         viewer = await this.pdf_viewer.instance({ ...this.viewer, pdf: this.pdf, navigation: false, parent: this,
           onLink: async ({ page }) => {
@@ -284,7 +297,7 @@ export const component = {
     /** Zero-based position in the mixed slide/app sequence. */
     this.goTo = index => run(async () => {
       if (!this.state) return;
-      if (!Number.isInteger(index) || index < 0 || index >= this.state.slides.length) throw new RangeError("Ungültiger Schritt.");
+      if (!Number.isInteger(index) || index < 0 || index >= this.state.slides.length) throw new RangeError("Invalid step.");
       if (index === this.state.index) return;
       const previous = this.state.index;
       try { await show(index); }

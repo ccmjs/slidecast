@@ -4,7 +4,7 @@ ccmjs-Komponente für PDF-Folien mit optionalem Audio, HTML-Beschreibungen und A
 
 ## Start
 
-Das Repo ist eine Insellösung: Unter `libs` liegen das ccmjs-Framework, eine Kopie des PDF-Viewers inklusive PDF.js und Ressourcen sowie die Hello-App für die Demo. Andere Repos werden zur Laufzeit nicht benötigt.
+Unter `libs` liegen ccmjs `28.0.0` und die PDF-Viewer-Komponente `1.0.0`. Der PDF-Viewer lädt PDF.js `6.3.289` und seine weiteren Ressourcen über die absoluten CDN-Pfade seines Releases. Auch die Demo-PDF und die inhaltsspezifische Hello-App (`1.0.3`) werden über jsDelivr geladen. Dafür ist eine Internetverbindung erforderlich.
 
 Den Slidecast-Ordner per HTTP ausliefern:
 
@@ -14,7 +14,7 @@ python3 -m http.server 8767 --bind 127.0.0.1 --directory /Pfad/zu/slidecast
 
 Dann `http://127.0.0.1:8767/` öffnen. Die Demo enthält drei PDF-Seiten und eine Hello-App zwischen den ersten beiden Seiten.
 
-Komponenteneigene Ressourcenpfade beginnen mit `././`. Sie sind lokal relativ zur einbettenden Seite und werden bei der Versionierung automatisch durch absolute Pfade ersetzt. Die unveränderten Standardpfade der PDF-Viewer-Kopie werden in der `pdf_viewer`-Abhängigkeit für ihre Lage unter `libs/pdf_viewer` konfiguriert. Bei Aktualisierungen die Kopie samt Ressourcen und Lizenzen erneuern.
+Komponenteneigene Ressourcenpfade beginnen mit `././`. Sie sind lokal relativ zur einbettenden Seite und werden bei der Versionierung automatisch durch absolute Pfade ersetzt. Die PDF-Viewer-Kopie verwendet ihre unveränderten, auf Version `1.0.0` festgelegten CDN-Pfade für `libs` und `resources`. Bei Aktualisierungen Komponentendatei, Lizenz und Versionsreferenzen gemeinsam erneuern.
 
 Nur eine PDF-URL genügt:
 
@@ -90,13 +90,3 @@ Snapshots können über `pdf: saved.pdf`, `ignore: { slides: saved.slides }` und
 Die Slidecast-Navigation steuert den Gesamtablauf. Der PDF-Viewer wurde dafür um `navigation: false` erweitert (Seitenknöpfe, Seiteneingabe und Pfeiltasten aus). PDF-interne Links werden über die Slidecast-Navigation aufgelöst: Audio, Beschreibung und Kommentierung wechseln zusammen mit der Zielfolie. Links springen gezielt zur PDF-Seite und können dabei App-Schritte überspringen. Bei mehrfach vorkommenden PDF-Seiten wird die aktuelle, sonst die erste passende Folie verwendet. Nicht enthaltene Seiten ändern den aktuellen Schritt nicht; stattdessen erscheint ein Hinweis. Externe Links öffnen wie im PDF-Viewer einen neuen Tab. Mit `viewer: { links: false }` können alle PDF-Links deaktiviert werden. Zoom und optionaler Download bleiben verfügbar.
 
 Apps mit Hintergrundaktivität sollten eine `destroy()`-Methode implementieren. Beim Verlassen eines App-Schritts wird dessen Oberfläche ausgehängt, die Instanz bleibt bis zum Neustart bzw. Zerstören erhalten.
-
-## Prüfung
-
-Mit Playwright und installiertem Browser bei laufendem Server:
-
-```sh
-SLIDECAST_URL=http://127.0.0.1:8767/ node --test test/slidecast.browser.test.mjs
-```
-
-Optional: `PLAYWRIGHT_PATH` (Modulpfad), `CHROME_PATH` (Browserdatei), `SLIDECAST_URL` (Demo-Adresse). Der Test prüft echtes PDF-Rendering, App-Einbettung, Navigation, Beschreibungsbereinigung, Audioelemente, mobile Breite, Neustart und Abbruch eines Passwortdialogs.

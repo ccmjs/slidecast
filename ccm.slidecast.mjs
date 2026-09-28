@@ -1,19 +1,11 @@
 /** PDF slidecasts with optional audio, descriptions and interleaved ccmjs apps. @license MIT */
 export const component = {
   name: "slidecast",
-  ccm: "././libs/framework/ccm.js",
+  ccm: "././libs/framework/ccm-28.0.0.min.js",
   config: {
-    // Local PDF viewer snapshot. Paths are relative to the embedding page until versioning.
-    pdf_viewer: ["ccm.component", "././libs/pdf_viewer/ccm.pdf_viewer.mjs", {
-      pdfjs: ["ccm.load", "././libs/pdf_viewer/libs/pdfjs/pdf.min.mjs"],
-      css: ["ccm.load", "././libs/pdf_viewer/libs/pdfjs/pdf_viewer.css", "././libs/pdf_viewer/resources/styles.css"],
-      worker: "././libs/pdf_viewer/libs/pdfjs/pdf.worker.min.mjs",
-      cMaps: "././libs/pdf_viewer/libs/pdfjs/cmaps/",
-      fonts: "././libs/pdf_viewer/libs/pdfjs/standard_fonts/",
-      wasm: "././libs/pdf_viewer/libs/pdfjs/wasm/",
-    }],
+    pdf_viewer: ["ccm.component", "././libs/pdf_viewer/ccm.pdf_viewer-1.0.0.min.mjs"],
     css: ["ccm.load", "././resources/styles.css"],
-    pdf: "././libs/pdf_viewer/resources/demo.pdf",
+    pdf: "https://cdn.jsdelivr.net/gh/ccmjs/pdf_viewer@v1.0.0/resources/demo.pdf",
     viewer: {
       navigation: false, links: true, download: true,
       labels: {

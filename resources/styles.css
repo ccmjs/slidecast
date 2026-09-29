@@ -1,18 +1,1 @@
-:host { display: block; min-width: 0; }
-.slidecast {
-  color: #172b43; font: 16px/1.6 system-ui, sans-serif;
-  .slidecast-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; }
-  .slidecast-nav button { font: inherit; color: inherit; background: white; border: 1px solid #bdcadb; border-radius: 8px; padding: 8px 16px; cursor: pointer; }
-  .slidecast-nav button:disabled { opacity: .45; cursor: default; }
-  .slidecast-nav button:focus-visible { outline: 3px solid #2463ce; outline-offset: 2px; }
-  .slidecast-nav output { text-align: center; }
-  .slidecast-image { display: block; max-width: 100%; margin: auto; }
-  .slidecast-details { overflow-wrap: anywhere; }
-  .slidecast-details audio { width: 100%; margin-top: 20px; }
-  .slidecast-description { padding: 4px 16px; }
-  .slidecast-comments { margin-top: 20px; padding: 16px; border: 1px dashed #bdcadb; border-radius: 8px; }
-  .slidecast-status:empty { display: none; }
-  [hidden] { display: none !important; }
-}
-
-.slidecast:focus-visible { outline: 3px solid #2463ce; outline-offset: 3px; }
+:host{min-width:0;display:block}.slidecast{color:#172b43;font:16px/1.6 system-ui,sans-serif}.slidecast .slidecast-nav{justify-content:space-between;align-items:center;gap:12px;padding:12px 0;display:flex}.slidecast .slidecast-nav button{font:inherit;color:inherit;cursor:pointer;background:#fff;border:1px solid #bdcadb;border-radius:8px;padding:8px 16px}.slidecast .slidecast-nav button:disabled{opacity:.45;cursor:default}.slidecast .slidecast-nav button:focus-visible{outline-offset:2px;outline:3px solid #2463ce}.slidecast .slidecast-nav output{text-align:center}.slidecast .slidecast-image{max-width:100%;margin:auto;display:block}.slidecast .slidecast-details{overflow-wrap:anywhere}.slidecast .slidecast-details audio{width:100%;margin-top:20px}.slidecast .slidecast-description{padding:4px 16px}.slidecast .slidecast-comments{border:1px dashed #bdcadb;border-radius:8px;margin-top:20px;padding:16px}.slidecast .slidecast-status:empty{display:none}.slidecast [hidden]{display:none!important}.slidecast:focus-visible{outline-offset:3px;outline:3px solid #2463ce}

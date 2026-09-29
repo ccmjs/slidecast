@@ -37,7 +37,7 @@ export const component = {
     extensions: [],
   },
   Instance: function () {
-    let viewer, ui, active, closing = false;
+    let viewer, viewerAction, ui, active, closing = false;
     let advanceTimer;
     const cancelAdvance = () => { clearTimeout(advanceTimer); advanceTimer = undefined; };
     const apps = new Map();
@@ -201,14 +201,22 @@ export const component = {
       clean(template.content);
       return template.content;
     };
+    // The PDF viewer ignores calls while busy. Wait for its accepted action before
+    // invoking the next one, with no await between the idle check and invocation.
+    const withIdleViewer = async action => {
+      while (viewer?.gui?.busy && viewerAction) await viewerAction.catch(() => {});
+      if (!closing) await action();
+    };
     const show = async index => {
       const slide = this.state.slides[index];
       pause();
       // Restore the viewer's measurable layout before fitting a PDF page after an app/image.
       ui.pdf.hidden = slide.page === undefined;
       if (slide.page !== undefined) {
-        await viewer.goToPage(slide.page);
-        if (viewer.state.zoom === "page-width") await viewer.setZoom("page-width");
+        await withIdleViewer(() => viewer.goToPage(slide.page));
+        if (closing) return;
+        if (viewer.state.zoom === "page-width") await withIdleViewer(() => viewer.setZoom("page-width"));
+        if (closing) return;
       }
       let app;
       if (slide.app) {
@@ -277,6 +285,18 @@ export const component = {
             await this.goTo(index);
             ui?.root.focus({ preventScroll: true });
           }, }, ui.pdf);
+        // Track zoom, resize and other actions without changing the pinned viewer.
+        // Ignored calls must not replace the promise of the action still running.
+        viewerAction = null;
+        if (typeof viewer.run === "function") {
+          const run = viewer.run.bind(viewer);
+          viewer.run = action => {
+            const busy = viewer.gui.busy;
+            const pending = run(action);
+            if (!busy) viewerAction = pending;
+            return pending;
+          };
+        }
         await viewer.start();
         if (!viewer.state) { ui.status.textContent = this.labels.pdfNotOpened; return; }
       }

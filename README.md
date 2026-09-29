@@ -1,92 +1,122 @@
 # Slidecast
 
-ccmjs-Komponente für PDF-Folien mit optionalem Audio, HTML-Beschreibungen und Apps zwischen den Folien.
+A ccmjs component for PDF slides with optional audio, HTML descriptions and apps between slides. The default interface is English.
 
-## Start
+## Quick start
 
-Unter `libs` liegen ccmjs `28.0.0` und die PDF-Viewer-Komponente `1.0.0`. Der PDF-Viewer lädt PDF.js `6.3.289` und seine weiteren Ressourcen über die absoluten CDN-Pfade seines Releases. Auch die Demo-PDF und die inhaltsspezifische Hello-App (`1.0.3`) werden über jsDelivr geladen. Dafür ist eine Internetverbindung erforderlich.
+The `libs` directory contains ccmjs `28.0.0` and the PDF Viewer component `1.0.0`. The viewer loads PDF.js `6.3.289` and its other resources through its release's absolute CDN URLs. The demo PDF and the demo's Hello app (`1.0.3`) are also loaded through jsDelivr. These resources require an internet connection.
 
-Den Slidecast-Ordner per HTTP ausliefern:
+Serve the Slidecast directory over HTTP:
 
 ```sh
-python3 -m http.server 8767 --bind 127.0.0.1 --directory /Pfad/zu/slidecast
+python3 -m http.server 8767 --bind 127.0.0.1 --directory /path/to/slidecast
 ```
 
-Dann `http://127.0.0.1:8767/` öffnen. Die Demo enthält drei PDF-Seiten und eine Hello-App zwischen den ersten beiden Seiten.
+Open [the local demo](http://127.0.0.1:8767/). It contains three PDF pages, an audio introduction and a Hello app between the first two pages.
 
-Komponenteneigene Ressourcenpfade beginnen mit `././`. Sie sind lokal relativ zur einbettenden Seite und werden bei der Versionierung automatisch durch absolute Pfade ersetzt. Die PDF-Viewer-Kopie verwendet ihre unveränderten, auf Version `1.0.0` festgelegten CDN-Pfade für `libs` und `resources`. Bei Aktualisierungen Komponentendatei, Lizenz und Versionsreferenzen gemeinsam erneuern.
+Component-owned resource paths begin with `././`. During local development they are relative to the embedding page; the versioning process replaces them with absolute URLs. The PDF Viewer copy retains its CDN paths pinned to version `1.0.0` for `libs` and `resources`. Update its component file, license and version references together.
 
-Nur eine PDF-URL genügt:
+To display your own PDF from a page served at the repository root:
 
-```js
-const app = await ccm.start('./slidecast/ccm.slidecast.mjs', {
-  pdf: './presentation.pdf'
-}, document.querySelector('#slidecast'));
+```html
+<script src="./libs/framework/ccm-28.0.0.min.js"></script>
+<div id="slidecast"></div>
+<script type="module">
+  const app = await ccm.start('./ccm.slidecast.mjs', {
+    pdf: './presentation.pdf'
+  }, document.querySelector('#slidecast'));
+</script>
 ```
 
-Das erzeugt `state.slides = [{ page: 1 }, { page: 2 }, …]`. Es werden keine JPEG-Dateien erzeugt: Ein einzelner PDF-Viewer rendert jeweils die benötigte PDF-Seite und behält Zoom, Textauswahl und Passwortdialog.
+This generates `state.slides = [{ page: 1 }, { page: 2 }, …]`. No JPEG files are generated: a single PDF Viewer renders the requested page and provides zoom, text selection and a password prompt when needed.
 
-## Eigener Ablauf
+## 📦 Usage with CDN (versioned)
+
+```html
+<script
+    src="https://cdn.jsdelivr.net/gh/ccmjs/slidecast@v1.0.0/libs/framework/ccm-28.0.0.min.js"
+    integrity="sha384-HDMeDDgKlR2OFJ3ECMwmA6wknqpfpeCiSZYlUhQaFg9FKrvHJp8MMSwrxibvWJ2G"
+    crossorigin="anonymous"
+></script>
+<div id="slidecast"></div>
+<script type="module">
+  const app = await ccm.start(
+      "https://cdn.jsdelivr.net/gh/ccmjs/slidecast@v1.0.0/ccm.slidecast-1.0.0.min.mjs#sha384-r3cJDePwtLuCIOK5jwR+ci9Z6qoCaoTc7FjHqKu6N5gsMC6bwF0jdNVu98oGOg8Z",
+      {},
+      document.querySelector("#slidecast")
+  );
+</script>
+```
+
+Place this example inside the document body. It uses the default configuration: the demo PDF, English labels, no autoplay and no comment placeholders. Set `pdf` in the configuration to display your own document. No local copy of the component or its libraries is needed.
+
+The framework script uses the browser's `integrity` attribute; ccmjs verifies the component using the `#sha384-…` URL fragment. These hashes cover the framework and component files, respectively, not every resource loaded by the component. The component hash covers the exact published main file, including its source map comment. Update the URL and hash together when changing versions.
+
+## Custom sequences
 
 ```js
-const app = await ccm.start('./slidecast/ccm.slidecast.mjs', {
+const app = await ccm.start('./ccm.slidecast.mjs', {
   pdf: './presentation.pdf',
   viewer: { download: false, textSelection: true },
   comments: true,
   ignore: {
     slides: [
       { page: 1 },
-      { page: 2, audio: './audio/02.mp3', description: '<h2>Vertiefung</h2><p>Erläuterung zur Folie.</p>' },
-      { app: ['ccm.start', './quiz/ccm.quiz.mjs', { /* Quiz-Konfiguration */ }] },
+      { page: 2, audio: './audio/02.mp3', description: '<h2>A closer look</h2><p>Additional explanation for this slide.</p>' },
+      { app: ['ccm.start', './quiz/ccm.quiz.mjs', { /* Quiz configuration */ }] },
       { page: 3 },
-      { image: './images/extra.jpg', description: 'Zusätzliche Bildfolie' }
+      { image: './images/extra.jpg', description: 'An additional image slide' }
     ]
   }
 }, document.querySelector('#slidecast'));
 ```
 
-`ignore.slides` definiert die vollständige Reihenfolge. Jeder Eintrag enthält genau eines von `page` (PDF-Seite ab 1), `image` (Bild-URL) oder `app` (`ccm.start`-Abhängigkeit). `audio`, `description` und bei Bildern `title` als Alternativtext sind optional. Ein leerer Ablauf erzeugt alle PDF-Seiten automatisch. Ein reiner Bild-/App-Ablauf braucht kein PDF.
+Replace the example PDF, media and Quiz URLs with your own resources.
 
-Der `ignore`-Bereich ist bewusst gewählt: ccmjs löst dort Abhängigkeiten nicht schon bei der Initialisierung auf. So bleiben die App-Abhängigkeiten im State serialisierbar und starten erst beim ersten Besuch ihres Schritts. Eingebettete Apps behalten beim Zurückblättern ihre Instanz und ihre Eingaben. Konfiguration und State sollen JSON-kompatible Daten enthalten; Module können mit `ccm.load` innerhalb der App-Abhängigkeit geladen werden.
+`ignore.slides` defines the complete sequence. Each entry contains exactly one of `page` (a PDF page, starting at 1), `image` (an image URL), or `app` (a `ccm.start` dependency). `audio`, `description`, and `title` as alternative text for images are optional. An empty sequence generates entries for all PDF pages. A sequence containing only images and apps does not need a PDF.
 
-Beschreibungen unterstützen `h2`–`h4`, `p`, `br`, `strong`, `em`, `b`, `i`, `ul`, `ol`, `li`, `blockquote`, `code`, `pre` und `a`. Andere Elemente samt Inhalt und alle Attribute außer sicheren Link-Zielen werden entfernt. Medien-URLs unterstützen HTTP(S) und Blob-URLs. Relative Medien-URLs beziehen sich auf die einbettende Seite. Externe PDFs benötigen passende CORS-Header.
+The `ignore` section prevents ccmjs from resolving dependencies during initialization. App dependencies therefore remain serializable in state and start only when their step is first visited. Embedded apps retain their instances and inputs when revisited. Configuration and state should contain JSON-compatible data; modules can be loaded through `ccm.load` within an app dependency.
 
-Audio verwendet native Browser-Steuerelemente und wird beim Wechsel angehalten. Standardmäßig startet es per Klick. `comments: true` zeigt unter jeder Folie einen Platzhalter für die später zu entwickelnde Kommentierungs-Komponente; unter App-Schritten erscheint kein Kommentarbereich. Es werden noch keine Kommentare gespeichert.
+Descriptions support `h2`–`h4`, `p`, `br`, `strong`, `em`, `b`, `i`, `ul`, `ol`, `li`, `blockquote`, `code`, `pre` and `a`. Other elements, including their contents, are removed. Attributes are stripped except for safe link destinations. Media URLs support HTTP(S) and Blob URLs. Relative media URLs resolve against the embedding page. Cross-origin PDFs require appropriate CORS headers.
+
+Audio uses native browser controls and pauses when the step changes. By default, playback starts on user interaction. `comments: true` displays a placeholder beneath each slide for the future commenting component; app steps have no comment area. Comments are not stored yet.
 
 ## Autoplay
 
-Mit `autoplay: true` versucht die Komponente, Audio beim Aufrufen einer Folie automatisch abzuspielen. Nach dem Audioende folgt nach `autoplayDelay` Millisekunden der nächste Schritt (Standard: `1000`, also eine Sekunde). Autoplay ist standardmäßig ausgeschaltet; die englische Demo aktiviert es.
+With `autoplay: true`, the component attempts to play audio when a slide is displayed. After the audio ends, the next step opens after `autoplayDelay` milliseconds (default: `1000`, or one second). Autoplay is disabled by default and enabled in the repository's demo configuration.
 
 ```js
 { autoplay: true, autoplayDelay: 1000 }
 ```
 
-Browser können den ersten automatischen Audiostart blockieren. In diesem Fall startet man die Wiedergabe über den Audio-Player; danach funktioniert das automatische Weiterblättern ebenso. Folien ohne Audio und App-Schritte werden nicht automatisch verlassen oder übersprungen. Am letzten Schritt endet der Ablauf. Manuelles Blättern, Neustart, Zerstören der Instanz sowie erneutes Abspielen oder Spulen brechen einen ausstehenden Wechsel ab. Bei deaktiviertem Autoplay bleibt man auch nach dem Audioende auf der Folie.
+Browsers may block the initial automatic playback. In that case, start playback through the audio player; automatic advancement still works after it ends. Slides without audio and app steps are not automatically left or skipped. Playback stops advancing at the last step. Manual navigation, restart, destruction, replaying or seeking cancels a pending transition. With autoplay disabled, the current slide remains visible after its audio ends.
 
-## Tastaturbedienung
+## Keyboard navigation
 
-Bei Fokus im Slidecast wechseln Pfeil links/rechts zum vorherigen/nächsten Schritt, einschließlich der eingebetteten Apps. An den Grenzen bleibt der aktuelle Schritt erhalten. Modifikatortasten und Tastenwiederholungen lösen keinen Wechsel aus. Eingabefelder, editierbare Inhalte, Audio-/Videoplayer und eingebettete Apps behalten ihre eigene Tastaturbedienung. Aus einer App heraus zuerst die Slidecast-Navigation fokussieren, um dort per Pfeiltasten weiterzublättern.
+When focus is inside the Slidecast, the left and right arrow keys navigate to the previous or next step, including embedded apps. Navigation stops at the sequence boundaries. Modifier keys and key repeats do not trigger navigation. Input fields, editable content, audio/video players and embedded apps retain their own keyboard behavior. To navigate away from an app using arrow keys, first focus the Slidecast navigation.
 
-## State und API
+## State and API
+
+Example state:
 
 ```js
 app.state = {
   pdf: './presentation.pdf',
-  index: 0, // Aktueller Schritt, ab 0; Apps zählen mit.
+  index: 0, // Current step, starting at 0; app steps count too.
   slides: [{ page: 1 }, { app: ['ccm.start', './quiz/ccm.quiz.mjs', {}] }]
 };
 ```
 
-- `await app.goTo(index)`: Schritt wechseln. Ungültige Indizes werden abgewiesen.
-- `app.getValue()`: Tiefe, serialisierbare Kopie des State.
-- `await app.start()`: Neuaufbau aus `pdf`, `viewer` und `ignore.slides`; bisherige Kindinstanzen werden freigegeben.
-- `await app.destroy()`: Audio stoppen, Kindinstanzen freigeben, Oberfläche leeren. Ein erneuter Start ist möglich.
-- `app.gui.busy`: Sperre während einer Aktion; gleichzeitige Aktionen werden ignoriert.
-- `app.error`: Letzter Aktionsfehler; Fehler erscheinen zusätzlich in der Oberfläche.
-- `extensions`: Funktionen mit `{ app, type }`, nacheinander ausgeführt. Ereignisse: `init`, `ready`, `before-start`, `render`, `start`, `change`, `error`, `destroy`. Nicht innerhalb einer laufenden Extension `destroy()` abwarten.
+- `await app.goTo(index)`: Navigate to a step. Invalid indices are rejected.
+- `app.getValue()`: Return a deep, serializable copy of state.
+- `await app.start()`: Rebuild from `pdf`, `viewer` and `ignore.slides`, releasing previous child instances.
+- `await app.destroy()`: Stop audio, release child instances and clear the interface. Restarting afterward is supported.
+- `app.gui.busy`: Interaction lock during an action; concurrent requests are ignored.
+- `app.error`: Most recent action error, also shown in the interface.
+- `extensions`: Functions receiving `{ app, type }`, called sequentially. Events: `init`, `ready`, `before-start`, `render`, `start`, `change`, `error`, `destroy`. Do not await `destroy()` from an extension inside an active action.
 
-Snapshots können über `pdf: saved.pdf`, `ignore: { slides: saved.slides }` und nach dem Start `await app.goTo(saved.index)` wiederhergestellt werden. Zustand eingebetteter Apps ist nicht Teil dieses Snapshots. Zum Anpassen der Folien `ignore.slides` ändern und erneut starten; kein Autoreneditor und kein Upload-/Speicherdienst enthalten.
+Restore a snapshot using `pdf: saved.pdf`, `ignore: { slides: saved.slides }`, then call `await app.goTo(saved.index)` after starting. Embedded apps' internal state is not part of the snapshot. To modify the sequence, update `ignore.slides` and restart. No authoring editor, upload service or persistence service is included.
 
-Die Slidecast-Navigation steuert den Gesamtablauf. Der PDF-Viewer wurde dafür um `navigation: false` erweitert (Seitenknöpfe, Seiteneingabe und Pfeiltasten aus). PDF-interne Links werden über die Slidecast-Navigation aufgelöst: Audio, Beschreibung und Kommentierung wechseln zusammen mit der Zielfolie. Links springen gezielt zur PDF-Seite und können dabei App-Schritte überspringen. Bei mehrfach vorkommenden PDF-Seiten wird die aktuelle, sonst die erste passende Folie verwendet. Nicht enthaltene Seiten ändern den aktuellen Schritt nicht; stattdessen erscheint ein Hinweis. Externe Links öffnen wie im PDF-Viewer einen neuen Tab. Mit `viewer: { links: false }` können alle PDF-Links deaktiviert werden. Zoom und optionaler Download bleiben verfügbar.
+Slidecast navigation controls the complete sequence. The PDF Viewer uses `navigation: false` to disable its page buttons, page input and arrow-key navigation. Internal PDF links are routed through Slidecast navigation so audio, descriptions and comment placeholders follow the target slide. Links jump directly to a PDF page and may skip app steps. If a page occurs multiple times, the current occurrence is preferred; otherwise, the first matching entry is used. If the target page is absent, a message is displayed and the current step remains unchanged. External links open a new tab. Set `viewer: { links: false }` to disable all PDF links. Zoom and optional download remain available. Slide changes wait for ongoing PDF Viewer actions so the displayed page and accompanying content stay synchronized.
 
-Apps mit Hintergrundaktivität sollten eine `destroy()`-Methode implementieren. Beim Verlassen eines App-Schritts wird dessen Oberfläche ausgehängt, die Instanz bleibt bis zum Neustart bzw. Zerstören erhalten.
+Apps with background activity should implement a `destroy()` method. Leaving an app step detaches its interface but retains its instance until the Slidecast is restarted or destroyed.

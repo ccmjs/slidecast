@@ -41,7 +41,7 @@ This generates `state.slides = [{ page: 1 }, { page: 2 }, …]`. No JPEG files a
 <div id="slidecast"></div>
 <script type="module">
   const app = await ccm.start(
-      "https://cdn.jsdelivr.net/gh/ccmjs/slidecast@v1.0.0/ccm.slidecast-1.0.0.min.mjs#sha384-r3cJDePwtLuCIOK5jwR+ci9Z6qoCaoTc7FjHqKu6N5gsMC6bwF0jdNVu98oGOg8Z",
+      "https://cdn.jsdelivr.net/gh/ccmjs/slidecast@v1.1.0/ccm.slidecast-1.1.0.min.mjs#sha384-l8tLDoXszYpItIkbcjxiPlKEZXu3yk97ctZD3D9liLWYZqwUsoQjVwI6K++JA9b/",
       {},
       document.querySelector("#slidecast")
   );

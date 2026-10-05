@@ -52,6 +52,8 @@ Place this example inside the document body. It uses the default configuration: 
 
 The framework script uses the browser's `integrity` attribute; ccmjs verifies the component using the `#sha384-…` URL fragment. These hashes cover the framework and component files, respectively, not every resource loaded by the component. The component hash covers the exact published main file, including its source map comment. Update the URL and hash together when changing versions.
 
+The CDN example is pinned to `v1.0.0`. Use the local module from Quick start for repository changes that have not yet been published, including the audio shortcuts and direct step entry described below.
+
 ## Custom sequences
 
 ```js
@@ -79,7 +81,9 @@ The `ignore` section prevents ccmjs from resolving dependencies during initializ
 
 Descriptions support `h2`–`h4`, `p`, `br`, `strong`, `em`, `b`, `i`, `ul`, `ol`, `li`, `blockquote`, `code`, `pre` and `a`. Other elements, including their contents, are removed. Attributes are stripped except for safe link destinations. Media URLs support HTTP(S) and Blob URLs. Relative media URLs resolve against the embedding page. Cross-origin PDFs require appropriate CORS headers.
 
-Audio uses native browser controls and pauses when the step changes. By default, playback starts on user interaction. `comments: true` displays a placeholder beneath each slide for the future commenting component; app steps have no comment area. Comments are not stored yet.
+Audio uses native browser controls and pauses when the step changes. By default, playback starts on user interaction. The chosen playback speed is retained across slides, silent steps, apps and restarts of the same instance, including speed changes made through the native player. It is shown beneath the player. This listener preference is separate from content state; a new instance or page reload starts at `1×`.
+
+`comments: true` displays a placeholder beneath each slide for the future commenting component; app steps have no comment area. Comments are not stored yet.
 
 ## Autoplay
 
@@ -91,9 +95,21 @@ With `autoplay: true`, the component attempts to play audio when a slide is disp
 
 Browsers may block the initial automatic playback. In that case, start playback through the audio player; automatic advancement still works after it ends. Slides without audio and app steps are not automatically left or skipped. Playback stops advancing at the last step. Manual navigation, restart, destruction, replaying or seeking cancels a pending transition. With autoplay disabled, the current slide remains visible after its audio ends.
 
-## Keyboard navigation
+## Navigation and audio shortcuts
 
-When focus is inside the Slidecast, the left and right arrow keys navigate to the previous or next step, including embedded apps. Navigation stops at the sequence boundaries. Modifier keys and key repeats do not trigger navigation. Input fields, editable content, audio/video players and embedded apps retain their own keyboard behavior. To navigate away from an app using arrow keys, first focus the Slidecast navigation.
+Enter a number in the **Step** field and press **Enter** to jump directly to that position. Steps start at `1` and include embedded apps and image slides. For PDF slides, the original PDF page number is also shown next to the total step count. Invalid, empty or fractional numbers leave the current step unchanged and display a message.
+
+With focus inside the Slidecast (click its content or use Tab), these shortcuts are available:
+
+| Key | Action |
+| --- | --- |
+| Left / Right arrow | Previous / next step, including embedded apps. |
+| `+` / `-` | Increase / decrease audio speed by `0.25×`, from `0.25×` to `4×`. |
+| `,` / `.` | Seek audio backward / forward by ten seconds, bounded by the start and end. |
+
+Audio shortcuts also work with focus on the slide's native audio player. Seeking preserves its paused or playing state and is available once the recording's duration has loaded. Steps without audio ignore audio shortcuts. Arrow navigation stops at the sequence boundaries and leaves native media controls' arrow-key behavior intact.
+
+Input fields, editable content and embedded apps retain their own keys, including controls inside nested shadow roots. To navigate away from an app using arrow keys, first focus the Slidecast navigation. Held keys and shortcuts with Ctrl, Alt or Command are ignored. Shift is accepted only for `+`, which requires it on some keyboard layouts. Shortcuts affect only the focused Slidecast instance.
 
 ## State and API
 

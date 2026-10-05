@@ -14,7 +14,7 @@
  * @author André Kless <andre.kless@web.de>
  * @copyright 2026 André Kless
  * @license MIT
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 export const component = {
@@ -58,6 +58,9 @@ export const component = {
     labels: {
       navigation: 'Slidecast navigation', previous: 'Previous', next: 'Next',
       step: 'Step', of: 'of', slide: 'Slide', audio: 'Slide audio',
+      invalidStep: 'Please enter a valid step number.',
+      playbackSpeed: 'Playback speed',
+      audioShortcuts: 'Keyboard: + / − speed; , / . back / forward 10 seconds.',
       comments: 'Slide comments', commentsPlaceholder: 'Commenting will be added later.',
       missingLinkTarget: 'The linked PDF page is not part of this slidecast.',
       error: 'The slidecast could not be displayed: ', pdfNotOpened: 'The PDF was not opened.',
@@ -85,6 +88,11 @@ export const component = {
 
     /** Single delayed autoplay transition, cancelled on replay, seek or teardown. */
     let advanceTimer;
+
+    /** Listener preference, shared by this instance's audio elements, including after restart.
+     * Kept outside content state; a new instance starts at normal speed (1×).
+     */
+    let playbackRate = 1;
 
     /** Sequence index -> started child instance. Repeated app entries stay independent. */
     const apps = new Map();
@@ -257,6 +265,11 @@ export const component = {
       const disabled = this.gui.busy || !this.state;
       ui.previous.disabled = disabled || this.state.index === 0;
       ui.next.disabled = disabled || this.state.index === this.state.slides.length - 1;
+      ui.input.disabled = disabled;
+      if (this.state) {
+        ui.input.value = this.state.index + 1;
+        ui.input.max = this.state.slides.length;
+      }
       ui.root.setAttribute("aria-busy", String(this.gui.busy));
     };
 
@@ -283,7 +296,12 @@ export const component = {
     /** Stop slide-owned audio and delayed navigation; embedded apps own their media. */
     const pause = () => {
       cancelAdvance();
-      ui?.details.querySelectorAll("audio").forEach(audio => audio.pause());
+      ui?.details.querySelectorAll("audio").forEach(audio => {
+        // ratechange is queued: capture a native-control change even if navigation
+        // starts in the same task, before that event has reached our listener.
+        playbackRate = audio.playbackRate;
+        audio.pause();
+      });
     };
 
     /** Cancel the pending autoplay transition, if any. */
@@ -294,7 +312,7 @@ export const component = {
       const root = node("section", "slidecast");
       root.setAttribute("aria-label", "Slidecast");
       root.tabIndex = 0;
-      root.setAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight");
+      root.setAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight Plus - , .");
       const nav = node("nav", "slidecast-nav");
       nav.setAttribute("aria-label", this.labels.navigation);
       const button = (label, delta) => {
@@ -304,33 +322,38 @@ export const component = {
         return el;
       };
       const previous = button(this.labels.previous, -1), next = button(this.labels.next, 1);
+      const form = node("form", "slidecast-step-form");
+      form.noValidate = true;
+      const label = node("label", "", this.labels.step + " ");
+      const input = node("input");
+      input.type = "number";
+      input.min = input.step = "1";
+      input.required = true;
+      input.setAttribute("aria-label", this.labels.step);
+      label.append(input);
       const progress = node("output");
       progress.setAttribute("aria-live", "polite");
-      nav.append(previous, progress, next);
+      form.append(label, progress);
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        if (closing || this.gui.busy || !this.state) return;
+        if (!input.checkValidity()) { ui.status.textContent = this.labels.invalidStep; return; }
+        // The displayed number is one-based and includes embedded app steps.
+        const navigation = this.goTo(input.valueAsNumber - 1);
+        // Disabled inputs lose focus during rendering. Use the persistent shell
+        // so arrow/audio shortcuts work immediately after submitting with Enter.
+        root.focus({ preventScroll: true });
+        navigation.catch(() => {});
+      });
+      nav.append(previous, form, next);
       const status = node("p", "slidecast-status");
       status.setAttribute("role", "status");
       const pdf = node("div", "slidecast-pdf"), image = node("img", "slidecast-image");
       const embedded = node("div", "slidecast-app"), details = node("div", "slidecast-details");
-      root.addEventListener("keydown", event => {
-        if (!["ArrowLeft", "ArrowRight"].includes(event.key) || event.defaultPrevented ||
-            event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-        // composedPath sees inputs inside the PDF viewer's shadow root as well.
-        // Embedded apps own their keyboard events, including their shadow DOM.
-        const path = event.composedPath();
-        if (path.includes(embedded) || path.some(target => target instanceof Element &&
-            (target.isContentEditable || target.matches("input, textarea, select, audio, video, [role='textbox'], [role='slider'], [role='spinbutton']")))) return;
-        if (!this.state) return;
-        event.preventDefault();
-        if (this.gui.busy || event.repeat) return;
-        const index = this.state.index + (event.key === "ArrowRight" ? 1 : -1);
-        if (index < 0 || index >= this.state.slides.length) return;
-        // Focus survives hiding the PDF or replacing the current slide's content.
-        root.focus({ preventScroll: true });
-        this.goTo(index).catch(() => {});
-      });
+      root.addEventListener("keydown", keydown);
       root.append(nav, status, pdf, image, embedded, details);
       this.element.replaceChildren(root);
-      ui = { root, previous, next, progress, status, pdf, image, embedded, details };
+      ui = { root, previous, next, input, progress, status, pdf, image, embedded, details };
       image.hidden = embedded.hidden = true;
       controls();
     };
@@ -341,6 +364,50 @@ export const component = {
       if (className) el.className = className;
       if (text !== undefined) el.textContent = text;
       return el;
+    };
+
+    /**
+     * Route shortcuts within this instance, including the viewer's shadow DOM.
+     * Inputs and embedded apps own their keys. Native media keeps its arrow keys;
+     * only the slide-owned audio also accepts our speed/seek shortcuts.
+     * Shift is allowed for + because some keyboard layouts require it.
+     * @param {KeyboardEvent} event Bubbling keydown event from the current shell.
+     */
+    const keydown = event => {
+      const navigation = ["ArrowLeft", "ArrowRight"].includes(event.key);
+      if ((!navigation && !["+", "-", ",", "."].includes(event.key)) || event.defaultPrevented ||
+          event.altKey || event.ctrlKey || event.metaKey || (event.shiftKey && event.key !== "+")) return;
+      const path = event.composedPath();
+      const audio = ui.details.querySelector("audio");
+      if (path.includes(ui.embedded) || path.some(target => target instanceof Element &&
+          (target.isContentEditable || target.matches("input, textarea, select, video, [role='textbox'], [role='slider'], [role='spinbutton']") ||
+           (target.matches("audio") && (navigation || target !== audio))))) return;
+      if (!this.state || (!navigation && !audio)) return;
+      event.preventDefault();
+      if (closing || this.gui.busy || event.repeat) return;
+      if (!navigation) { audioShortcut(audio, event.key); return; }
+      const index = this.state.index + (event.key === "ArrowRight" ? 1 : -1);
+      if (index < 0 || index >= this.state.slides.length) return;
+      // Focus survives hiding the PDF or replacing the current slide's content.
+      ui.root.focus({ preventScroll: true });
+      this.goTo(index).catch(() => {});
+    };
+
+    /**
+     * Adjust speed by 0.25 (bounded to 0.25–4×), or seek by ten seconds.
+     * Seeking waits for finite metadata, clamps to the recording and preserves
+     * paused/playing state. Cancel autoplay immediately, before the seeking event.
+     * @param {HTMLAudioElement} audio Current slide-owned player.
+     * @param {string} key One of +, -, comma or period.
+     */
+    const audioShortcut = (audio, key) => {
+      if (key === "+" || key === "-") {
+        playbackRate = Math.max(0.25, Math.min(4, Math.round((audio.playbackRate + (key === "+" ? 0.25 : -0.25)) * 100) / 100));
+        audio.defaultPlaybackRate = audio.playbackRate = playbackRate;
+      } else if (audio.readyState >= 1 && Number.isFinite(audio.duration) && audio.duration > 0) {
+        cancelAdvance();
+        audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + (key === "." ? 10 : -10)));
+      }
     };
 
     /**
@@ -411,12 +478,7 @@ export const component = {
       ui.embedded.replaceChildren(...(app ? [app.host] : []));
       ui.details.replaceChildren();
       if (slide.audio) {
-        const audio = node("audio");
-        audio.controls = true;
-        audio.preload = "metadata";
-        audio.src = mediaURL(slide.audio);
-        audio.setAttribute("aria-label", this.labels.audio);
-        ui.details.append(audio);
+        const audio = buildAudio(slide.audio);
         if (!slide.app) prepareAutoplay(audio, index);
       }
       if (slide.description) {
@@ -431,7 +493,8 @@ export const component = {
         ui.details.append(comment);
       }
       this.state.index = index;
-      ui.progress.textContent = `${this.labels.step} ${index + 1} ${this.labels.of} ${this.state.slides.length}` + (slide.page ? ` · ${this.labels.slide} ${slide.page}` : "");
+      ui.input.value = index + 1;
+      ui.progress.textContent = `${this.labels.of} ${this.state.slides.length}` + (slide.page ? ` · ${this.labels.slide} ${slide.page}` : "");
       await this.emit("render");
       if (this.autoplay && !slide.app && !closing) {
         // Browsers may require a user gesture; native controls remain available.
@@ -451,6 +514,37 @@ export const component = {
     const withIdleViewer = async action => {
       while (viewer?.gui?.busy && viewerAction) await viewerAction.catch(() => {});
       if (!closing) await action();
+    };
+
+    /**
+     * Create the current player and its shortcut hint. Set both rate properties:
+     * loading a new media resource can reset playbackRate to defaultPlaybackRate.
+     * Native-control changes are remembered too; detached players cannot overwrite
+     * the current preference with a late ratechange event.
+     * @param {string} url Validated slide audio URL.
+     * @returns {HTMLAudioElement} Player already attached to the details area.
+     */
+    const buildAudio = url => {
+      const audio = node("audio");
+      audio.controls = true;
+      audio.preload = "metadata";
+      audio.src = mediaURL(url);
+      audio.defaultPlaybackRate = audio.playbackRate = playbackRate;
+      audio.setAttribute("aria-label", this.labels.audio);
+      audio.setAttribute("aria-keyshortcuts", "Plus - , .");
+      const help = node("div", "slidecast-audio-help");
+      const speed = node("output", "slidecast-rate");
+      speed.setAttribute("aria-live", "polite");
+      const rememberRate = () => {
+        if (ui?.details.querySelector("audio") !== audio) return;
+        playbackRate = audio.playbackRate;
+        speed.textContent = `${this.labels.playbackSpeed}: ${playbackRate}×`;
+      };
+      audio.addEventListener("ratechange", rememberRate);
+      help.append(speed, node("span", "", this.labels.audioShortcuts));
+      ui.details.append(audio, help);
+      rememberRate();
+      return audio;
     };
 
     /**

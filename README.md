@@ -52,7 +52,7 @@ Place this example inside the document body. It uses the default configuration: 
 
 The framework script uses the browser's `integrity` attribute; ccmjs verifies the component using the `#sha384-…` URL fragment. These hashes cover the framework and component files, respectively, not every resource loaded by the component. The component hash covers the exact published main file, including its source map comment. Update the URL and hash together when changing versions.
 
-The CDN example is pinned to `v1.0.0`. Use the local module from Quick start for repository changes that have not yet been published, including the audio shortcuts and direct step entry described below.
+The component in the CDN example is pinned to `v1.1.0`. The repository prepares `v1.2.0`, which adds volume/mute retention and the user-facing autoplay switch and removes the separate speed readout. Use the local module from Quick start until that release is published; then update the component URL and integrity hash together.
 
 ## Custom sequences
 
@@ -81,13 +81,15 @@ The `ignore` section prevents ccmjs from resolving dependencies during initializ
 
 Descriptions support `h2`–`h4`, `p`, `br`, `strong`, `em`, `b`, `i`, `ul`, `ol`, `li`, `blockquote`, `code`, `pre` and `a`. Other elements, including their contents, are removed. Attributes are stripped except for safe link destinations. Media URLs support HTTP(S) and Blob URLs. Relative media URLs resolve against the embedding page. Cross-origin PDFs require appropriate CORS headers.
 
-Audio uses native browser controls and pauses when the step changes. By default, playback starts on user interaction. The chosen playback speed is retained across slides, silent steps, apps and restarts of the same instance, including speed changes made through the native player. It is shown beneath the player. This listener preference is separate from content state; a new instance or page reload starts at `1×`.
+Audio uses native browser controls and pauses when the step changes. By default, playback starts on user interaction. The chosen playback speed, volume and mute setting are retained across slides, silent steps, apps and restarts of the same instance, including changes made through the native player. These listener preferences are separate from content state; a new instance or page reload starts at `1×`, full player volume and unmuted. Retaining the volume setting does not normalize recordings made at different loudness levels.
 
 `comments: true` displays a placeholder beneath each slide for the future commenting component; app steps have no comment area. Comments are not stored yet.
 
 ## Autoplay
 
-With `autoplay: true`, the component attempts to play audio when a slide is displayed. After the audio ends, the next step opens after `autoplayDelay` milliseconds (default: `1000`, or one second). Autoplay is disabled by default and enabled in the repository's demo configuration.
+The **Autoplay** checkbox above the content lets learners enable or disable automatic playback at any time, including while a slide is loading. Press **A** with focus inside the Slidecast to toggle the same setting; the shortcut is shown beside the checkbox. `config.autoplay` supplies the initial choice: disabled by default and enabled in the repository's demo configuration. The switch updates the instance's `autoplay` value, retaining the choice across slide changes and restarts of that instance. A new instance or page reload uses the configuration again.
+
+Enabling autoplay starts or resumes the current slide's audio. With autoplay enabled, audio starts when entering a slide; after it ends, the next step opens after `autoplayDelay` milliseconds (default: `1000`, or one second). Disabling autoplay immediately pauses the current slide's audio and cancels pending automatic navigation. The native play button remains available for manual playback.
 
 ```js
 { autoplay: true, autoplayDelay: 1000 }
@@ -104,12 +106,13 @@ With focus inside the Slidecast (click its content or use Tab), these shortcuts 
 | Key | Action |
 | --- | --- |
 | Left / Right arrow | Previous / next step, including embedded apps. |
+| `A` | Toggle autoplay, including on silent steps and while loading. |
 | `+` / `-` | Increase / decrease audio speed by `0.25×`, from `0.25×` to `4×`. |
 | `,` / `.` | Seek audio backward / forward by ten seconds, bounded by the start and end. |
 
 Audio shortcuts also work with focus on the slide's native audio player. Seeking preserves its paused or playing state and is available once the recording's duration has loaded. Steps without audio ignore audio shortcuts. Arrow navigation stops at the sequence boundaries and leaves native media controls' arrow-key behavior intact.
 
-Input fields, editable content and embedded apps retain their own keys, including controls inside nested shadow roots. To navigate away from an app using arrow keys, first focus the Slidecast navigation. Held keys and shortcuts with Ctrl, Alt or Command are ignored. Shift is accepted only for `+`, which requires it on some keyboard layouts. Shortcuts affect only the focused Slidecast instance.
+Input fields, editable content and embedded apps retain their own keys, including controls inside nested shadow roots. The Autoplay checkbox itself accepts `A` as well as its native Space key. To navigate away from an app using arrow keys, first focus the Slidecast navigation. Held keys and shortcuts with Ctrl, Alt or Command are ignored. Shift is accepted only for `+`, which requires it on some keyboard layouts. Shortcuts affect only the focused Slidecast instance.
 
 ## State and API
 

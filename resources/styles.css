@@ -10,11 +10,15 @@
   .slidecast-step-form label { max-width: 100%; }
   .slidecast-step-form input { width: 4.5em; }
   .slidecast-nav output { text-align: center; }
+  .slidecast-playback { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+  .slidecast-autoplay { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+  .slidecast-autoplay input { width: 1.1em; height: 1.1em; margin: 0; accent-color: #2463ce; }
+  .slidecast-autoplay input:focus-visible { outline: 3px solid #2463ce; outline-offset: 2px; }
+  .slidecast-autoplay kbd { border: 1px solid #bdcadb; border-radius: 4px; padding: 0 5px; font: .8em/1.5 system-ui, sans-serif; }
   .slidecast-image { display: block; max-width: 100%; margin: auto; }
   .slidecast-details { overflow-wrap: anywhere; }
   .slidecast-details audio { width: 100%; margin-top: 20px; }
-  .slidecast-audio-help { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 4px 0; font-size: .875em; }
-  .slidecast-rate { font-variant-numeric: tabular-nums; }
+  .slidecast-audio-help { padding: 4px 0; font-size: .875em; }
   .slidecast-description { padding: 4px 16px; }
   .slidecast-comments { margin-top: 20px; padding: 16px; border: 1px dashed #bdcadb; border-radius: 8px; }
   .slidecast-status:empty { display: none; }

@@ -14,7 +14,7 @@
  * @author André Kless <andre.kless@web.de>
  * @copyright 2026 André Kless
  * @license MIT
- * @version 1.1.0
+ * @version 1.2.0
  */
 
 export const component = {
@@ -51,7 +51,7 @@ export const component = {
     ignore: { slides: [] },
     /** Show a per-slide placeholder only; no commenting service is implemented yet. */
     comments: false,
-    /** Try playing slide audio on entry and advance after it finishes. */
+    /** Initial autoplay choice; the learner can change it using the persistent GUI switch. */
     autoplay: false,
     /** Pause after audio ends, in milliseconds (0–2147483647); no timer on silent slides. */
     autoplayDelay: 1000,
@@ -59,7 +59,7 @@ export const component = {
       navigation: 'Slidecast navigation', previous: 'Previous', next: 'Next',
       step: 'Step', of: 'of', slide: 'Slide', audio: 'Slide audio',
       invalidStep: 'Please enter a valid step number.',
-      playbackSpeed: 'Playback speed',
+      autoplay: 'Autoplay', autoplayDescription: 'Play audio and advance automatically',
       audioShortcuts: 'Keyboard: + / − speed; , / . back / forward 10 seconds.',
       comments: 'Slide comments', commentsPlaceholder: 'Commenting will be added later.',
       missingLinkTarget: 'The linked PDF page is not part of this slidecast.',
@@ -93,6 +93,12 @@ export const component = {
      * Kept outside content state; a new instance starts at normal speed (1×).
      */
     let playbackRate = 1;
+
+    /** Native player volume (0–1), retained across this instance's slides and restarts. */
+    let volume = 1;
+
+    /** Keep the listener's mute choice independently of the selected volume. */
+    let muted = false;
 
     /** Sequence index -> started child instance. Repeated app entries stay independent. */
     const apps = new Map();
@@ -266,6 +272,9 @@ export const component = {
       ui.previous.disabled = disabled || this.state.index === 0;
       ui.next.disabled = disabled || this.state.index === this.state.slides.length - 1;
       ui.input.disabled = disabled;
+      // The listener must be able to disable autoplay even while a slide is loading.
+      ui.autoplay.checked = Boolean(this.autoplay);
+      ui.autoplay.disabled = closing;
       if (this.state) {
         ui.input.value = this.state.index + 1;
         ui.input.max = this.state.slides.length;
@@ -297,9 +306,9 @@ export const component = {
     const pause = () => {
       cancelAdvance();
       ui?.details.querySelectorAll("audio").forEach(audio => {
-        // ratechange is queued: capture a native-control change even if navigation
+        // Media preference events are queued: capture a change even if navigation
         // starts in the same task, before that event has reached our listener.
-        playbackRate = audio.playbackRate;
+        rememberAudio(audio);
         audio.pause();
       });
     };
@@ -307,12 +316,24 @@ export const component = {
     /** Cancel the pending autoplay transition, if any. */
     const cancelAdvance = () => { clearTimeout(advanceTimer); advanceTimer = undefined; };
 
+    /**
+     * Read the native player's listener preferences. Both queued media events and
+     * teardown use this helper; late events from detached players are ignored.
+     * @param {HTMLAudioElement} audio Player whose settings may have changed.
+     */
+    const rememberAudio = audio => {
+      if (ui?.details.querySelector("audio") !== audio) return;
+      playbackRate = audio.playbackRate;
+      volume = audio.volume;
+      muted = audio.muted;
+    };
+
     /** Rebuild the persistent shell; show() replaces only the active step's content. */
     const build = () => {
       const root = node("section", "slidecast");
       root.setAttribute("aria-label", "Slidecast");
       root.tabIndex = 0;
-      root.setAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight Plus - , .");
+      root.setAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight Plus - , . a");
       const nav = node("nav", "slidecast-nav");
       nav.setAttribute("aria-label", this.labels.navigation);
       const button = (label, delta) => {
@@ -346,14 +367,28 @@ export const component = {
         navigation.catch(() => {});
       });
       nav.append(previous, form, next);
+      const playback = node("div", "slidecast-playback");
+      const autoplayLabel = node("label", "slidecast-autoplay");
+      const autoplay = node("input");
+      autoplay.type = "checkbox";
+      autoplay.title = this.labels.autoplayDescription;
+      autoplay.setAttribute("aria-keyshortcuts", "a");
+      autoplay.addEventListener("change", () => {
+        if (closing || ui?.autoplay !== autoplay) return;
+        setAutoplay(autoplay.checked);
+      });
+      const shortcut = node("kbd", "", "A");
+      shortcut.setAttribute("aria-hidden", "true");
+      autoplayLabel.append(autoplay, node("span", "", this.labels.autoplay), shortcut);
+      playback.append(autoplayLabel);
       const status = node("p", "slidecast-status");
       status.setAttribute("role", "status");
       const pdf = node("div", "slidecast-pdf"), image = node("img", "slidecast-image");
       const embedded = node("div", "slidecast-app"), details = node("div", "slidecast-details");
       root.addEventListener("keydown", keydown);
-      root.append(nav, status, pdf, image, embedded, details);
+      root.append(nav, playback, status, pdf, image, embedded, details);
       this.element.replaceChildren(root);
-      ui = { root, previous, next, input, progress, status, pdf, image, embedded, details };
+      ui = { root, previous, next, input, progress, autoplay, status, pdf, image, embedded, details };
       image.hidden = embedded.hidden = true;
       controls();
     };
@@ -367,6 +402,20 @@ export const component = {
     };
 
     /**
+     * Apply the same autoplay behavior for the checkbox and its keyboard shortcut.
+     * This stays outside the navigation lock so opt-out takes effect during loading;
+     * an accepted render rechecks the current choice before starting audio.
+     * @param {boolean} enabled Listener's current autoplay choice.
+     */
+    const setAutoplay = enabled => {
+      this.autoplay = enabled;
+      ui.autoplay.checked = enabled;
+      cancelAdvance();
+      if (!enabled) pause();
+      else if (!this.gui.busy) playAudio();
+    };
+
+    /**
      * Route shortcuts within this instance, including the viewer's shadow DOM.
      * Inputs and embedded apps own their keys. Native media keeps its arrow keys;
      * only the slide-owned audio also accepts our speed/seek shortcuts.
@@ -375,16 +424,20 @@ export const component = {
      */
     const keydown = event => {
       const navigation = ["ArrowLeft", "ArrowRight"].includes(event.key);
-      if ((!navigation && !["+", "-", ",", "."].includes(event.key)) || event.defaultPrevented ||
+      const autoplayShortcut = event.key.toLowerCase() === "a";
+      if ((!navigation && !autoplayShortcut && !["+", "-", ",", "."].includes(event.key)) || event.defaultPrevented ||
           event.altKey || event.ctrlKey || event.metaKey || (event.shiftKey && event.key !== "+")) return;
       const path = event.composedPath();
       const audio = ui.details.querySelector("audio");
       if (path.includes(ui.embedded) || path.some(target => target instanceof Element &&
-          (target.isContentEditable || target.matches("input, textarea, select, video, [role='textbox'], [role='slider'], [role='spinbutton']") ||
+          (target.isContentEditable || (target.matches("input, textarea, select, video, [role='textbox'], [role='slider'], [role='spinbutton']") &&
+           !(autoplayShortcut && target === ui.autoplay)) ||
            (target.matches("audio") && (navigation || target !== audio))))) return;
-      if (!this.state || (!navigation && !audio)) return;
+      if ((!this.state && !autoplayShortcut) || (!navigation && !autoplayShortcut && !audio)) return;
       event.preventDefault();
-      if (closing || this.gui.busy || event.repeat) return;
+      if (closing || event.repeat) return;
+      if (autoplayShortcut) { setAutoplay(!this.autoplay); return; }
+      if (this.gui.busy) return;
       if (!navigation) { audioShortcut(audio, event.key); return; }
       const index = this.state.index + (event.key === "ArrowRight" ? 1 : -1);
       if (index < 0 || index >= this.state.slides.length) return;
@@ -496,11 +549,7 @@ export const component = {
       ui.input.value = index + 1;
       ui.progress.textContent = `${this.labels.of} ${this.state.slides.length}` + (slide.page ? ` · ${this.labels.slide} ${slide.page}` : "");
       await this.emit("render");
-      if (this.autoplay && !slide.app && !closing) {
-        // Browsers may require a user gesture; native controls remain available.
-        const audio = ui.details.querySelector("audio");
-        if (audio) void audio.play().catch(() => {});
-      }
+      playAudio();
     };
 
     /**
@@ -519,8 +568,8 @@ export const component = {
     /**
      * Create the current player and its shortcut hint. Set both rate properties:
      * loading a new media resource can reset playbackRate to defaultPlaybackRate.
-     * Native-control changes are remembered too; detached players cannot overwrite
-     * the current preference with a late ratechange event.
+     * Restore volume and mute before playback can begin. Native-control changes
+     * are remembered too; detached players cannot overwrite current preferences.
      * @param {string} url Validated slide audio URL.
      * @returns {HTMLAudioElement} Player already attached to the details area.
      */
@@ -530,20 +579,14 @@ export const component = {
       audio.preload = "metadata";
       audio.src = mediaURL(url);
       audio.defaultPlaybackRate = audio.playbackRate = playbackRate;
+      audio.volume = volume;
+      audio.muted = muted;
       audio.setAttribute("aria-label", this.labels.audio);
       audio.setAttribute("aria-keyshortcuts", "Plus - , .");
-      const help = node("div", "slidecast-audio-help");
-      const speed = node("output", "slidecast-rate");
-      speed.setAttribute("aria-live", "polite");
-      const rememberRate = () => {
-        if (ui?.details.querySelector("audio") !== audio) return;
-        playbackRate = audio.playbackRate;
-        speed.textContent = `${this.labels.playbackSpeed}: ${playbackRate}×`;
-      };
-      audio.addEventListener("ratechange", rememberRate);
-      help.append(speed, node("span", "", this.labels.audioShortcuts));
+      const help = node("div", "slidecast-audio-help", this.labels.audioShortcuts);
+      audio.addEventListener("ratechange", () => rememberAudio(audio));
+      audio.addEventListener("volumechange", () => rememberAudio(audio));
       ui.details.append(audio, help);
-      rememberRate();
       return audio;
     };
 
@@ -551,7 +594,7 @@ export const component = {
      * Bind end-of-audio navigation to this exact render's audio element and index.
      * Checking both rejects stale events after returning to the same sequence entry.
      * Replay/seeking cancels the delay; a pending callback rechecks autoplay and ended.
-     * Only show() initiates playback; this helper merely schedules the next step.
+     * Playback is started separately; this helper merely schedules the next step.
      * @param {HTMLAudioElement} audio Current slide's audio element.
      * @param {number} index Zero-based sequence position.
      */
@@ -572,6 +615,17 @@ export const component = {
         };
         advanceTimer = setTimeout(advance, this.autoplayDelay);
       });
+    };
+
+    /**
+     * Start/resume the current slide's audio after rendering or enabling autoplay.
+     * App steps own their playback. Browser autoplay restrictions leave the native
+     * controls usable, and disabling autoplay can pause a pending play() request.
+     */
+    const playAudio = () => {
+      if (!this.autoplay || closing || !this.state || this.state.slides[this.state.index].app) return;
+      const audio = ui.details.querySelector("audio");
+      if (audio) void audio.play().catch(() => {});
     };
 
     /**

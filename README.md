@@ -4,7 +4,7 @@ A ccmjs component for PDF slides with optional audio, HTML descriptions and apps
 
 ## Quick start
 
-The `libs` directory contains ccmjs `28.0.0` and the PDF Viewer component `1.0.0`. The viewer loads PDF.js `6.3.289` and its other resources through its release's absolute CDN URLs. The demo PDF and the demo's Hello app (`1.0.3`) are also loaded through jsDelivr. These resources require an internet connection.
+The `libs` directory contains ccmjs `28.0.0` and the PDF Viewer component `1.1.0`. The viewer loads PDF.js `6.3.289` and its other resources through its release's absolute CDN URLs. The demo PDF and the demo's Hello app (`1.0.3`) are also loaded through jsDelivr. These resources require an internet connection.
 
 Serve the Slidecast directory over HTTP:
 
@@ -14,7 +14,7 @@ python3 -m http.server 8767 --bind 127.0.0.1 --directory /path/to/slidecast
 
 Open [the local demo](http://127.0.0.1:8767/). It contains three PDF pages, an audio introduction and a Hello app between the first two pages.
 
-Component-owned resource paths begin with `././`. During local development they are relative to the embedding page; the versioning process replaces them with absolute URLs. The PDF Viewer copy retains its CDN paths pinned to version `1.0.0` for `libs` and `resources`. Update its component file, license and version references together.
+Component-owned resource paths begin with `././`. During local development they are relative to the embedding page; the versioning process replaces them with absolute URLs. The PDF Viewer copy retains its CDN paths pinned to version `1.1.0` for `libs` and `resources`. Update its component file, license and version references together.
 
 To display your own PDF from a page served at the repository root:
 
@@ -52,7 +52,7 @@ Place this example inside the document body. It uses the default configuration: 
 
 The framework script uses the browser's `integrity` attribute; ccmjs verifies the component using the `#sha384-…` URL fragment. These hashes cover the framework and component files, respectively, not every resource loaded by the component. The component hash covers the exact published main file, including its source map comment. Update the URL and hash together when changing versions.
 
-The component in the CDN example is pinned to `v1.1.0`. The repository prepares `v1.2.0`, which adds volume/mute retention and the user-facing autoplay switch and removes the separate speed readout. Use the local module from Quick start until that release is published; then update the component URL and integrity hash together.
+The component in the CDN example is pinned to `v1.2.0`. The repository prepares `v1.3.0`, which uses PDF Viewer `1.1.0` and adds its thumbnail overview to Slidecast. Use the local module from Quick start until that release is published; then update the component URL and integrity hash together.
 
 ## Custom sequences
 
@@ -114,6 +114,16 @@ Audio shortcuts also work with focus on the slide's native audio player. Seeking
 
 Input fields, editable content and embedded apps retain their own keys, including controls inside nested shadow roots. The Autoplay checkbox itself accepts `A` as well as its native Space key. To navigate away from an app using arrow keys, first focus the Slidecast navigation. Held keys and shortcuts with Ctrl, Alt or Command are ignored. Shift is accepted only for `+`, which requires it on some keyboard layouts. Shortcuts affect only the focused Slidecast instance.
 
+## Slide overview
+
+Choose **Slide overview** in the PDF toolbar to show or hide thumbnail previews. Set `viewer: { thumbnailsOpen: true }` to show them initially, as in the English demo, or `viewer: { thumbnails: false }` to remove the overview. By default the toggle is available and the overview starts closed.
+
+Selecting a preview navigates through Slidecast so the PDF page, step number, audio, description and comment placeholder stay synchronized. Playback speed, volume, mute and autoplay choices are retained. The current PDF page is highlighted after navigation by thumbnails, links, arrow keys or the step field.
+
+The overview contains only PDF pages present in the configured sequence and retains their original PDF page numbers. Repeated pages share a preview: selection stays on the current occurrence, or opens the first occurrence if another page is active. Image and app steps have no PDF previews; the viewer and its overview are hidden while those steps are active. Use the main navigation to move between all steps.
+
+PDF Viewer `1.1.0` renders visible previews lazily and adapts the overview to narrow containers. Its original, versioned distribution is bundled unchanged; Slidecast adapts its navigation methods and page-control visibility at runtime. When updating this dependency, check this integration against the new viewer's navigation and DOM structure.
+
 ## State and API
 
 Example state:
@@ -136,6 +146,6 @@ app.state = {
 
 Restore a snapshot using `pdf: saved.pdf`, `ignore: { slides: saved.slides }`, then call `await app.goTo(saved.index)` after starting. Embedded apps' internal state is not part of the snapshot. To modify the sequence, update `ignore.slides` and restart. No authoring editor, upload service or persistence service is included.
 
-Slidecast navigation controls the complete sequence. The PDF Viewer uses `navigation: false` to disable its page buttons, page input and arrow-key navigation. Internal PDF links are routed through Slidecast navigation so audio, descriptions and comment placeholders follow the target slide. Links jump directly to a PDF page and may skip app steps. If a page occurs multiple times, the current occurrence is preferred; otherwise, the first matching entry is used. If the target page is absent, a message is displayed and the current step remains unchanged. External links open a new tab. Set `viewer: { links: false }` to disable all PDF links. Zoom and optional download remain available. Slide changes wait for ongoing PDF Viewer actions so the displayed page and accompanying content stay synchronized.
+Slidecast navigation controls the complete sequence. The PDF Viewer builds its overview during startup; Slidecast then disables its page buttons, page input and arrow-key navigation through an adapter for the pinned viewer version. Internal PDF links and thumbnail selections are routed through Slidecast navigation so audio, descriptions and comment placeholders follow the target slide. These selections jump directly to a PDF page and may skip app steps. If a page occurs multiple times, the current occurrence is preferred; otherwise, the first matching entry is used. If the target page is absent, a message is displayed and the current step remains unchanged. External links open a new tab. Set `viewer: { links: false }` to disable all PDF links. Zoom and optional download remain available. Slide changes wait for ongoing PDF Viewer actions so the displayed page and accompanying content stay synchronized.
 
 Apps with background activity should implement a `destroy()` method. Leaving an app step detaches its interface but retains its instance until the Slidecast is restarted or destroyed.

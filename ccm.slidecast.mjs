@@ -14,7 +14,7 @@
  * @author André Kless <andre.kless@web.de>
  * @copyright 2026 André Kless
  * @license MIT
- * @version 1.2.0
+ * @version 1.3.0
  */
 
 export const component = {
@@ -24,14 +24,16 @@ export const component = {
     /** Component factory, not a started instance; start() supplies its host and config.
      * The pinned viewer loads its own library/style resources from versioned CDN URLs.
      */
-    pdf_viewer: ["ccm.component", "././libs/pdf_viewer/ccm.pdf_viewer-1.0.0.min.mjs"],
+    pdf_viewer: ["ccm.component", "././libs/pdf_viewer/ccm.pdf_viewer-1.1.0.min.mjs"],
     /** ././ paths are local before the publishing pipeline rewrites them. */
     css: ["ccm.load", "././resources/styles.css"],
     /** Input PDF; only needed for automatic sequences or entries containing page. */
-    pdf: "https://cdn.jsdelivr.net/gh/ccmjs/pdf_viewer@v1.0.0/resources/demo.pdf",
+    pdf: "https://cdn.jsdelivr.net/gh/ccmjs/pdf_viewer@v1.1.0/resources/demo.pdf",
     /** PDF-viewer options. start() always owns pdf, parent, navigation and onLink. */
     viewer: {
       navigation: false, links: true, download: true,
+      /** Overview of PDF pages in the sequence; image and app steps have no PDF preview. */
+      thumbnails: true, thumbnailsOpen: false,
       labels: {
         viewer: "PDF Viewer", previous: "Previous", next: "Next", page: "Page", of: "of",
         zoomOut: "Zoom out", zoomIn: "Zoom in", fit: "Fit to width", download: "Download",
@@ -42,6 +44,7 @@ export const component = {
         passwordLabel: "Password", unlock: "Open PDF", cancel: "Cancel",
         passwordCancelled: "Opening the PDF was cancelled.",
         invalidPage: "Please enter a valid page number.", link: "Link in PDF",
+        thumbnails: "Slide overview", thumbnailError: "Preview unavailable",
       },
     },
     /** ccm skips dependency resolution inside ignore, preserving lazy app definitions.
@@ -76,6 +79,9 @@ export const component = {
 
     /** Last accepted viewer.run() promise; awaited before submitting another viewer action. */
     let viewerAction;
+
+    /** Original child goToPage(), used only by show(); thumbnail requests go through Slidecast. */
+    let renderPage;
 
     /** Persistent DOM references created by build(); cleared after successful destruction. */
     let ui;
@@ -136,18 +142,13 @@ export const component = {
       const input = structuredClone(this.ignore?.slides || []);
       if (!Array.isArray(input)) throw new TypeError("ignore.slides must be an array.");
       if (input.length === 0 || input.some(slide => slide?.page !== undefined)) {
-        viewer = await this.pdf_viewer.instance({ ...this.viewer, pdf: this.pdf, navigation: false, parent: this,
-          // The viewer invokes onLink outside its own lock. Map the resolved PDF page
-          // to a sequence position so links update audio/prose just like other navigation.
-          onLink: async ({ page }) => {
-            if (closing || this.gui.busy || !this.state) return;
-            // Prefer the current occurrence, otherwise the first occurrence in the sequence.
-            const index = this.state.slides[this.state.index].page === page ? this.state.index
-              : this.state.slides.findIndex(slide => slide.page === page);
-            if (index < 0) { ui.status.textContent = this.labels.missingLinkTarget; return; }
-            await this.goTo(index);
-            ui?.root.focus({ preventScroll: true });
-          }, }, ui.pdf);
+        // A partial viewer config must retain Slidecast's English labels and defaults.
+        const options = { ...component.config.viewer, ...this.viewer,
+          labels: { ...component.config.viewer.labels, ...this.viewer?.labels } };
+        // Viewer 1.1.0 builds previews only with navigation enabled. Once built,
+        // connectViewer() keeps the overview and transfers navigation to Slidecast.
+        viewer = await this.pdf_viewer.instance({ ...options, pdf: this.pdf,
+          navigation: options.thumbnails !== false, parent: this, onLink: navigateToPage }, ui.pdf);
         // Adapt the pinned viewer's public run() method without editing the dependency.
         // Install before start(), so initial rendering and deferred resizes are tracked too.
         // Keep its return value/locking semantics; an ignored call resolves immediately
@@ -164,10 +165,15 @@ export const component = {
         }
         await viewer.start();
         if (!viewer.state) { ui.status.textContent = this.labels.pdfNotOpened; return; }
+        connectViewer();
       }
       const slides = input.length ? input : Array.from({ length: viewer.state.pages }, (_, i) => ({ page: i + 1 }));
       validate(slides);
       this.state = { pdf: this.pdf, index: 0, slides };
+      // Keep PDF numbering while excluding pages omitted by a custom sequence.
+      const pages = new Set(slides.map(slide => slide.page));
+      for (const preview of viewer?.element?.querySelectorAll(".thumbnail") || [])
+        preview.hidden = !pages.has(Number(preview.dataset.page));
       await show(0);
       await this.emit("start");
     });
@@ -294,6 +300,7 @@ export const component = {
       apps.clear();
       if (viewer) children.push(viewer);
       viewer = null;
+      renderPage = null;
       const results = await Promise.allSettled(children.map(async child => {
         try { await child.destroy?.(); }
         finally { child.host?.remove(); if (this.children) delete this.children[child.index]; }
@@ -464,6 +471,39 @@ export const component = {
     };
 
     /**
+     * Map a PDF link or thumbnail to the mixed sequence before changing the viewer.
+     * Prefer the current occurrence of a duplicated page, otherwise the first one.
+     * Requests during a Slidecast action are ignored; show() waits for PDF actions.
+     * @param {{page: number}} target One-based PDF page, independent of step numbering.
+     */
+    const navigateToPage = async ({ page }) => {
+      if (closing || this.gui.busy || !this.state) return;
+      const index = this.state.slides[this.state.index].page === page ? this.state.index
+        : this.state.slides.findIndex(slide => slide.page === page);
+      if (index < 0) { ui.status.textContent = this.labels.missingLinkTarget; return; }
+      await this.goTo(index);
+      ui?.root.focus({ preventScroll: true });
+    };
+
+    /**
+     * Adapter for the pinned PDF Viewer 1.1.0, whose overview requires navigation
+     * during start() and whose preview buttons call its public goToPage() method.
+     * Retain that renderer for show(), then route child requests to navigateToPage()
+     * to avoid recursive rendering and keep audio, prose and comments synchronized.
+     * After thumbnail creation, navigation=false disables the child's arrow handler.
+     * Its already-built page form and adjacent previous/next buttons must be hidden
+     * explicitly; this small DOM adapter is tied to the pinned viewer version.
+     */
+    const connectViewer = () => {
+      const child = viewer;
+      renderPage = child.goToPage.bind(child);
+      child.goToPage = page => viewer === child ? navigateToPage({ page: Number(page) }) : Promise.resolve();
+      child.navigation = false;
+      const form = child.element?.querySelector(".page-form");
+      if (form) for (const control of [form.previousElementSibling, form, form.nextElementSibling]) control.hidden = true;
+    };
+
+    /**
      * Validate the complete sequence before showing it. PDF bounds require a loaded
      * viewer; this checks metadata, not remote media availability or app validity.
      * @param {Slide[]} slides Cloned config entries or generated PDF entries.
@@ -505,7 +545,7 @@ export const component = {
       // Restore the viewer's measurable layout before fitting a PDF page after an app/image.
       ui.pdf.hidden = slide.page === undefined;
       if (slide.page !== undefined) {
-        await withIdleViewer(() => viewer.goToPage(slide.page));
+        await withIdleViewer(() => renderPage(slide.page));
         if (closing) return;
         if (viewer.state.zoom === "page-width") await withIdleViewer(() => viewer.setZoom("page-width"));
         if (closing) return;
